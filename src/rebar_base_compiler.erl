@@ -48,12 +48,23 @@ run(Config, FirstFiles, RestFiles, CompileFn) ->
         [] ->
             ok;
         _ ->
+            ?DEBUG("Files to compile: ~p~n", [RestFiles]),
             Self = self(),
-            F = fun() -> compile_worker(Self, Config, CompileFn) end,
-            Jobs = rebar:get_jobs(Config),
-            ?DEBUG("Starting ~B compile worker(s)~n", [Jobs]),
-            Pids = [spawn_monitor(F) || _I <- lists:seq(1,Jobs)],
-            compile_queue(Config, Pids, RestFiles)
+            %% F = fun() -> compile_worker(Self, Config, CompileFn) end,
+            F = fun(S) -> compile_worker(S, Config, CompileFn) end,
+            ?DEBUG("Adding Skel to codepath (temporary measure)~n", []),
+            case code:add_path("/Users/libellule/git/st_andrews/code/rebar/deps/skel/ebin") of
+                true ->
+                    ?DEBUG("Starting compilation with Skel Farm~n", []),
+                    skel:farm(F, RestFiles);
+                {error, bad_directory} ->
+                    ?DEBUG("Failed to add Skel to codepath~n", []),
+                    error(bad_directory)
+            end
+            %% Jobs = rebar:get_jobs(Config),
+            %% ?DEBUG("Starting ~B compile worker(s)~n", [Jobs]),
+            %% Pids = [spawn_monitor(F) || _I <- lists:seq(1,Jobs)],
+            %% compile_queue(Config, Pids, RestFiles)
     end.
 
 run(Config, FirstFiles, SourceDir, SourceExt, TargetDir, TargetExt,
@@ -209,33 +220,55 @@ compile_queue(Config, Pids, Targets) ->
             ?FAIL
     end.
 
-compile_worker(QueuePid, Config, CompileFn) ->
-    QueuePid ! {next, self()},
-    receive
-        {compile, Source} ->
-            case catch(CompileFn(Source, Config)) of
-                {ok, Ws} ->
-                    QueuePid ! {compiled, Source, Ws},
-                    compile_worker(QueuePid, Config, CompileFn);
-                ok ->
-                    QueuePid ! {compiled, Source},
-                    compile_worker(QueuePid, Config, CompileFn);
-                skipped ->
-                    QueuePid ! {skipped, Source},
-                    compile_worker(QueuePid, Config, CompileFn);
-                Error ->
-                    QueuePid ! {fail, {{error, Error}, {source, Source}}},
-                    case rebar_config:get_xconf(Config, keep_going, false) of
-                        false ->
-                            ok;
-                        true ->
-                            compile_worker(QueuePid, Config, CompileFn)
-                    end
-            end;
-
-        empty ->
-            ok
+compile_worker(Source, Config, CompileFn) ->
+    case catch(CompileFn(Source, Config)) of
+        {ok, Ws} ->
+            report(Ws),
+            ?CONSOLE("Compiled ~s\n", [unit_source(Source)]);
+        ok ->
+            ?CONSOLE("Compiled ~s\n", [unit_source(Source)]);
+        skipped ->
+            ?INFO("Skipped ~s\n", [unit_source(Source)]);
+        Error ->
+            maybe_report(Error),
+            ?CONSOLE("Compiling ~s failed:\n",
+                     [maybe_absname(Config, unit_source(Source))]),
+            ?DEBUG("Worker compilation failed: ~p\n", [Error]),
+            case rebar_config:get_xconf(Config, keep_going, false) of
+                false ->
+                    ?FAIL;
+                true ->
+                    ?WARN("Continuing after build error\n", [])
+            end
     end.
+
+%% compile_worker(QueuePid, Config, CompileFn) ->
+%%     QueuePid ! {next, self()},
+%%     receive
+%%         {compile, Source} ->
+%%             case catch(CompileFn(Source, Config)) of
+%%                 {ok, Ws} ->
+%%                     QueuePid ! {compiled, Source, Ws},
+%%                     compile_worker(QueuePid, Config, CompileFn);
+%%                 ok ->
+%%                     QueuePid ! {compiled, Source},
+%%                     compile_worker(QueuePid, Config, CompileFn);
+%%                 skipped ->
+%%                     QueuePid ! {skipped, Source},
+%%                     compile_worker(QueuePid, Config, CompileFn);
+%%                 Error ->
+%%                     QueuePid ! {fail, {{error, Error}, {source, Source}}},
+%%                     case rebar_config:get_xconf(Config, keep_going, false) of
+%%                         false ->
+%%                             ok;
+%%                         true ->
+%%                             compile_worker(QueuePid, Config, CompileFn)
+%%                     end
+%%             end;
+
+%%         empty ->
+%%             ok
+%%     end.
 
 format_errors(Config, Source, Errors) ->
     format_errors(Config, Source, "", Errors).

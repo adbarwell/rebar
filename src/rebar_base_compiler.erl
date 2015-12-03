@@ -52,15 +52,15 @@ run(Config, FirstFiles, RestFiles, CompileFn) ->
             Self = self(),
             %% F = fun() -> compile_worker(Self, Config, CompileFn) end,
             F = fun(S) -> compile_worker(S, Config, CompileFn) end,
-            ?DEBUG("Adding Skel to codepath (temporary measure)~n", []),
-            case code:add_path("/Users/libellule/git/st_andrews/code/rebar/deps/skel/ebin") of
-                true ->
+            %% ?DEBUG("Adding Skel to codepath (temporary measure)~n", []),
+            %% case code:add_path("/Users/libellule/git/st_andrews/code/rebar/deps/skel/ebin") of
+            %%     true ->
                     ?DEBUG("Starting compilation with Skel Farm~n", []),
-                    skel:farm(F, RestFiles);
-                {error, bad_directory} ->
-                    ?DEBUG("Failed to add Skel to codepath~n", []),
-                    error(bad_directory)
-            end
+                    skel:farm(F, RestFiles)
+            %%     {error, bad_directory} ->
+            %%         ?DEBUG("Failed to add Skel to codepath~n", []),
+            %%         error(bad_directory)
+            %% end
             %% Jobs = rebar:get_jobs(Config),
             %% ?DEBUG("Starting ~B compile worker(s)~n", [Jobs]),
             %% Pids = [spawn_monitor(F) || _I <- lists:seq(1,Jobs)],

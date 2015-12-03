@@ -62,7 +62,8 @@
     dialyzer,
     asn1,
     snmp,
-    edoc
+    edoc,
+    skel
    ]},
   {env, [
          %% Default log level

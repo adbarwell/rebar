@@ -5,11 +5,12 @@ RETEST=$(PWD)/deps/retest/retest
 LOG_LEVEL?=debug
 RT_TARGETS?=inttest
 
-all:
+all: skel
 	./bootstrap
 
 clean:
 	@rm -rf rebar .rebar/erlcinfo ebin/*.beam inttest/rt.work rt.work .eunit
+	@cd skel && make clean
 
 distclean: clean
 	@rm -rf deps
@@ -47,6 +48,10 @@ test_inttest: all deps
 
 travis: clean debug xref clean all deps test
 
-skel: ./skel/ebin/*.beam
-	@git submodule update --init --recursive skel
+skel: make-skel
+
+make-skel: fetch-skel
 	@cd skel && make compile
+
+fetch-skel: ./skel/src/*.erl
+	@git submodule update --init --recursive skel

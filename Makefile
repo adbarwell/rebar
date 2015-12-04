@@ -46,3 +46,7 @@ test_inttest: all deps
 	@$(RETEST) -l $(LOG_LEVEL) $(RT_TARGETS)
 
 travis: clean debug xref clean all deps test
+
+skel: ./skel/ebin/*.beam
+	@git submodule update --init --recursive skel
+	@cd skel && make compile

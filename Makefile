@@ -50,8 +50,8 @@ travis: clean debug xref clean all deps test
 
 skel: make-skel
 
-make-skel: fetch-skel
+make-skel: ./skel/src/*.erl
 	@cd skel && make compile
 
-fetch-skel: ./skel/src/*.erl
+./skel/src/*.erl:
 	@git submodule update --init --recursive skel

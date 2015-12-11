@@ -49,14 +49,15 @@ run(Config, FirstFiles, RestFiles, CompileFn) ->
             ok;
         _ ->
             ?DEBUG("Files to compile: ~p~n", [RestFiles]),
-            Self = self(),
+            %% Self = self(),
             %% F = fun() -> compile_worker(Self, Config, CompileFn) end,
             F = fun(S) -> compile_worker(S, Config, CompileFn) end,
             %% ?DEBUG("Adding Skel to codepath (temporary measure)~n", []),
             %% case code:add_path("/Users/libellule/git/st_andrews/code/rebar/deps/skel/ebin") of
             %%     true ->
-                    ?DEBUG("Starting compilation with Skel Farm~n", []),
-                    skel:farm(F, RestFiles)
+            NWorkers = erlang:system_info(schedulers),
+            ?DEBUG("Starting compilation using Skel Farm with ~p workers.~n", [NWorkers]),
+            skel:farm(F, NWorkers, RestFiles)
             %%     {error, bad_directory} ->
             %%         ?DEBUG("Failed to add Skel to codepath~n", []),
             %%         error(bad_directory)
@@ -170,55 +171,55 @@ unit_source({Source, _Target}) ->
 unit_source(Source) ->
     Source.
 
-compile_queue(_Config, [], []) ->
-    ok;
-compile_queue(Config, Pids, Targets) ->
-    receive
-        {next, Worker} ->
-            case Targets of
-                [] ->
-                    Worker ! empty,
-                    compile_queue(Config, Pids, Targets);
-                [Source | Rest] ->
-                    Worker ! {compile, Source},
-                    compile_queue(Config, Pids, Rest)
-            end;
+%% compile_queue(_Config, [], []) ->
+%%     ok;
+%% compile_queue(Config, Pids, Targets) ->
+%%     receive
+%%         {next, Worker} ->
+%%             case Targets of
+%%                 [] ->
+%%                     Worker ! empty,
+%%                     compile_queue(Config, Pids, Targets);
+%%                 [Source | Rest] ->
+%%                     Worker ! {compile, Source},
+%%                     compile_queue(Config, Pids, Rest)
+%%             end;
 
-        {fail, {_, {source, Unit}}=Error} ->
-            maybe_report(Error),
-            ?CONSOLE("Compiling ~s failed:\n",
-                     [maybe_absname(Config, unit_source(Unit))]),
-            ?DEBUG("Worker compilation failed: ~p\n", [Error]),
-            case rebar_config:get_xconf(Config, keep_going, false) of
-                false ->
-                    ?FAIL;
-                true ->
-                    ?WARN("Continuing after build error\n", []),
-                    compile_queue(Config, Pids, Targets)
-            end;
+%%         {fail, {_, {source, Unit}}=Error} ->
+%%             maybe_report(Error),
+%%             ?CONSOLE("Compiling ~s failed:\n",
+%%                      [maybe_absname(Config, unit_source(Unit))]),
+%%             ?DEBUG("Worker compilation failed: ~p\n", [Error]),
+%%             case rebar_config:get_xconf(Config, keep_going, false) of
+%%                 false ->
+%%                     ?FAIL;
+%%                 true ->
+%%                     ?WARN("Continuing after build error\n", []),
+%%                     compile_queue(Config, Pids, Targets)
+%%             end;
 
-        {compiled, Unit, Warnings} ->
-            report(Warnings),
-            ?CONSOLE("Compiled ~s\n", [unit_source(Unit)]),
-            compile_queue(Config, Pids, Targets);
+%%         {compiled, Unit, Warnings} ->
+%%             report(Warnings),
+%%             ?CONSOLE("Compiled ~s\n", [unit_source(Unit)]),
+%%             compile_queue(Config, Pids, Targets);
 
-        {compiled, Unit} ->
-            ?CONSOLE("Compiled ~s\n", [unit_source(Unit)]),
-            compile_queue(Config, Pids, Targets);
+%%         {compiled, Unit} ->
+%%             ?CONSOLE("Compiled ~s\n", [unit_source(Unit)]),
+%%             compile_queue(Config, Pids, Targets);
 
-        {skipped, Unit} ->
-            ?INFO("Skipped ~s\n", [unit_source(Unit)]),
-            compile_queue(Config, Pids, Targets);
+%%         {skipped, Unit} ->
+%%             ?INFO("Skipped ~s\n", [unit_source(Unit)]),
+%%             compile_queue(Config, Pids, Targets);
 
-        {'DOWN', Mref, _, Pid, normal} ->
-            ?DEBUG("Worker exited cleanly\n", []),
-            Pids2 = lists:delete({Pid, Mref}, Pids),
-            compile_queue(Config, Pids2, Targets);
+%%         {'DOWN', Mref, _, Pid, normal} ->
+%%             ?DEBUG("Worker exited cleanly\n", []),
+%%             Pids2 = lists:delete({Pid, Mref}, Pids),
+%%             compile_queue(Config, Pids2, Targets);
 
-        {'DOWN', _Mref, _, _Pid, Info} ->
-            ?DEBUG("Worker failed: ~p\n", [Info]),
-            ?FAIL
-    end.
+%%         {'DOWN', _Mref, _, _Pid, Info} ->
+%%             ?DEBUG("Worker failed: ~p\n", [Info]),
+%%             ?FAIL
+%%     end.
 
 compile_worker(Source, Config, CompileFn) ->
     case catch(CompileFn(Source, Config)) of
